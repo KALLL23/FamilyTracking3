@@ -48,7 +48,7 @@ fun WelcomeScreen() {
     Box(modifier = Modifier.fillMaxSize()) {
         // Menggunakan gambar map.png yang sudah Anda sediakan
         Image(
-            painter = painterResource(id = R.drawable.map),
+            painter = painterResource(id = R.drawable.map_baru),
             contentDescription = "Map Background",
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop

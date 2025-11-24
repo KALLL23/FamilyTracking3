@@ -76,7 +76,7 @@ fun AuthScreen(isLogin: Boolean) {
                 .clip(RoundedCornerShape(20.dp))
         ) {
             Image(
-                painter = painterResource(id = R.drawable.map),
+                painter = painterResource(id = R.drawable.map_baru),
                 contentDescription = "Form Background",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.matchParentSize()
