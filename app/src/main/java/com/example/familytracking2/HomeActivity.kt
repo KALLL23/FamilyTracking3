@@ -4,7 +4,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,12 +11,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.Image
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,9 +64,13 @@ class HomeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Ambil username yang dikirim dari LoginActivity
+        val username = intent.getStringExtra("EXTRA_USERNAME") ?: "User"
+
         setContent {
             FamilyTracking2Theme {
-                MainScreen()
+                MainScreen(username = username)
             }
         }
     }
@@ -74,7 +80,7 @@ class HomeActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen() {
+fun MainScreen(username: String) {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
 
     Scaffold(
@@ -95,7 +101,7 @@ fun MainScreen() {
                 is Screen.Saved -> SavedLocationScreen()
                 is Screen.Map -> MapScreen()
                 is Screen.History -> HistoryScreen()
-                is Screen.Profile -> ProfileContent()
+                is Screen.Profile -> ProfileContent(username = username) // Pass username ke Profile
             }
         }
     }
@@ -142,7 +148,7 @@ fun HomeContent(modifier: Modifier = Modifier, onProfileClick: () -> Unit) {
 // --- 5. PROFILE CONTENT ---
 
 @Composable
-fun ProfileContent(modifier: Modifier = Modifier) {
+fun ProfileContent(modifier: Modifier = Modifier, username: String) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -157,7 +163,7 @@ fun ProfileContent(modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.End
         ) {
             Text(
-                text = "Wahyu Siganteng",
+                text = username, // Gunakan username dinamis disini
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.Black,
@@ -466,10 +472,7 @@ fun SavedLocationItem(name: String) {
 }
 
 @Composable
-fun DeviceAddDialog(
-    onDismissRequest: () -> Unit,
-    onDeviceAdded: (Device) -> Unit
-) {
+fun DeviceAddDialog(onDismissRequest: () -> Unit, onDeviceAdded: (Device) -> Unit) {
     AlertDialog(
         onDismissRequest = onDismissRequest,
         title = { Text("Add Device") },
@@ -493,10 +496,7 @@ fun DeviceAddDialog(
 }
 
 @Composable
-fun QrCodeDisplayDialog(
-    code: String,
-    onDismissRequest: () -> Unit
-) {
+fun QrCodeDisplayDialog(code: String, onDismissRequest: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismissRequest,
         title = { Text("My QR Code") },
