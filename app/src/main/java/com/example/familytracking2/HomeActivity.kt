@@ -4,21 +4,50 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.Image
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.rounded.QrCode2
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FabPosition
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,7 +67,7 @@ import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
-import java.util.*
+import java.util.UUID
 
 // --- 1. DATA & SCREEN DEFINITIONS ---
 
@@ -65,12 +94,13 @@ class HomeActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Ambil username yang dikirim dari LoginActivity
-        val username = intent.getStringExtra("EXTRA_USERNAME") ?: "User"
+        val username = intent.getStringExtra("EXTRA_USERNAME") ?: "Guest"
 
         setContent {
             FamilyTracking2Theme {
-                MainScreen(username = username)
+                Surface(modifier = Modifier.fillMaxSize(), color = Color.White) {
+                    MainScreen(username = username)
+                }
             }
         }
     }
@@ -101,7 +131,7 @@ fun MainScreen(username: String) {
                 is Screen.Saved -> SavedLocationScreen()
                 is Screen.Map -> MapScreen()
                 is Screen.History -> HistoryScreen()
-                is Screen.Profile -> ProfileContent(username = username) // Pass username ke Profile
+                is Screen.Profile -> ProfileContent(username = username)
             }
         }
     }
@@ -124,7 +154,8 @@ fun HomeContent(modifier: Modifier = Modifier, onProfileClick: () -> Unit) {
             Text(
                 text = "Home",
                 fontSize = 32.sp,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = Color.Black
             )
             IconButton(
                 onClick = onProfileClick,
@@ -141,7 +172,7 @@ fun HomeContent(modifier: Modifier = Modifier, onProfileClick: () -> Unit) {
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
-        Text("Welcome to Family Tracking Home Page!")
+        Text("Welcome to Family Tracking Home Page!", color = Color.Black)
     }
 }
 
@@ -163,7 +194,7 @@ fun ProfileContent(modifier: Modifier = Modifier, username: String) {
             horizontalArrangement = Arrangement.End
         ) {
             Text(
-                text = username, // Gunakan username dinamis disini
+                text = username,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.Black,
@@ -214,10 +245,12 @@ private enum class MapPage { DeviceList, MapDisplay }
 
 @Composable
 fun MapScreen(modifier: Modifier = Modifier) {
+    val logoImage = R.drawable.logo
+
     val devices = remember {
         mutableStateListOf(
-            Device(name = "Kakak", address = "Jl. magelang km.14", location = LatLng(-7.6835, 110.3392), image = R.drawable.logo),
-            Device(name = "Adek", address = "SDN 1 Sinduadi, Jl. M...", location = LatLng(-7.7595, 110.359), image = R.drawable.logo)
+            Device(name = "Kakak", address = "Jl. magelang km.14", location = LatLng(-7.6835, 110.3392), image = logoImage),
+            Device(name = "Adek", address = "SDN 1 Sinduadi", location = LatLng(-7.7595, 110.359), image = logoImage)
         )
     }
 
@@ -334,8 +367,13 @@ fun DeviceConnectScreen(
     }
 }
 
+// --- 7. DEVICE ITEM FIXED TANPA TRY-CATCH ---
+
 @Composable
 fun DeviceItem(device: Device, onClick: () -> Unit) {
+    // Fallback jika resource tidak ditemukan
+    val painter = painterResource(id = device.image)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -346,13 +384,14 @@ fun DeviceItem(device: Device, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Image(
-            painter = painterResource(id = device.image),
-            contentDescription = "Profile Picture",
+            painter = painter,
+            contentDescription = "Device Icon",
             modifier = Modifier
                 .size(48.dp)
                 .clip(CircleShape),
             contentScale = ContentScale.Crop
         )
+
         Spacer(modifier = Modifier.width(16.dp))
         Column {
             Text(device.name, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.Black)
@@ -361,9 +400,12 @@ fun DeviceItem(device: Device, onClick: () -> Unit) {
     }
 }
 
+// --- 8. MAP DISPLAY ---
+
 @Composable
 fun MapDisplayScreen(devices: List<Device>, onBack: () -> Unit) {
     val cameraPositionState = rememberCameraPositionState()
+
     LaunchedEffect(devices) {
         if (devices.isNotEmpty()) {
             if (devices.size == 1) {
@@ -383,6 +425,7 @@ fun MapDisplayScreen(devices: List<Device>, onBack: () -> Unit) {
             }
         }
     }
+
     Box(modifier = Modifier.fillMaxSize()) {
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
@@ -396,6 +439,7 @@ fun MapDisplayScreen(devices: List<Device>, onBack: () -> Unit) {
                 )
             }
         }
+
         Button(
             onClick = onBack,
             modifier = Modifier
@@ -408,7 +452,7 @@ fun MapDisplayScreen(devices: List<Device>, onBack: () -> Unit) {
     }
 }
 
-// --- 7. OTHER SCREENS ---
+// --- 9. OTHER SCREENS & COMPONENTS ---
 
 @Composable
 fun SavedLocationScreen(modifier: Modifier = Modifier) {
@@ -421,7 +465,8 @@ fun SavedLocationScreen(modifier: Modifier = Modifier) {
             text = "Saved Location",
             fontSize = 32.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 24.dp)
+            modifier = Modifier.padding(bottom = 24.dp),
+            color = Color.Black
         )
         LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item { SavedLocationItem("Ngops Cantik w Bestie") }
@@ -442,13 +487,12 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
             text = "History Activity",
             fontSize = 32.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 24.dp)
+            modifier = Modifier.padding(bottom = 24.dp),
+            color = Color.Black
         )
-        Text("No history available yet.")
+        Text("No history available yet.", color = Color.Black)
     }
 }
-
-// --- 8. COMPONENTS & DIALOGS ---
 
 @Composable
 fun SavedLocationItem(name: String) {
@@ -467,7 +511,7 @@ fun SavedLocationItem(name: String) {
             tint = Color.Black
         )
         Spacer(modifier = Modifier.width(16.dp))
-        Text(text = name, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+        Text(text = name, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.Black)
     }
 }
 
@@ -525,7 +569,7 @@ fun BottomNavBar(currentScreen: Screen, onScreenSelected: (Screen) -> Unit) {
                 },
                 label = {
                     Text(
-                        text = screen.route.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
+                        text = screen.route.replaceFirstChar { it.uppercaseChar() },
                         fontSize = 10.sp
                     )
                 },

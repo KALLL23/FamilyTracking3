@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
@@ -19,22 +21,11 @@
         android:theme="@style/Theme.FamilyTracking2">
 
         <!-- Meta-data untuk Google Maps API Key -->
-        <!-- TODO: Ganti YOUR_API_KEY_HERE dengan API Key Anda yang sebenarnya -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyAMZ9zOLtmPIWYh67jelDkBbzvBFwtzCTg" />
 
-        <!-- Activity yang ada di aplikasi Anda -->
-        <activity
-            android:name=".HomeActivity"
-            android:exported="false"
-            android:windowSoftInputMode="adjustResize" />
-        <activity
-            android:name=".RegisterActivity"
-            android:exported="false" />
-        <activity
-            android:name=".LoginActivity"
-            android:exported="false" />
+        <!-- SPLASH ACTIVITY - Launcher (Dibuka pertama kali) -->
         <activity
             android:name=".SplashActivity"
             android:exported="true"
@@ -44,13 +35,36 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- LOGIN ACTIVITY -->
+        <activity
+            android:name=".LoginActivity"
+            android:exported="false"
+            android:launchMode="standard"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- REGISTER ACTIVITY -->
+        <activity
+            android:name=".RegisterActivity"
+            android:exported="false"
+            android:launchMode="standard"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- HOME ACTIVITY -->
+        <activity
+            android:name=".HomeActivity"
+            android:exported="false"
+            android:launchMode="standard"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- MAIN ACTIVITY (Jika masih digunakan) -->
         <activity
             android:name=".MainActivity"
             android:exported="false"
             android:label="@string/app_name"
             android:theme="@style/Theme.FamilyTracking2" />
 
-        <!--  Tambahkan ini untuk menangani perubahan orientasi saat scanner aktif  -->
+        <!-- Barcode Scanner Activity -->
         <activity
             android:name="com.journeyapps.barcodescanner.CaptureActivity"
             android:screenOrientation="fullSensor"
