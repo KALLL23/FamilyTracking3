@@ -57,6 +57,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.activity:activity-compose:1.8.2")
 
+    // --- Galerry ---
+    implementation("io.coil-kt:coil-compose:2.5.0")
+
     // --- JETPACK COMPOSE (UPDATE PENTING) ---
     // Mengupdate BOM ke 2024.06.00 untuk memperbaiki crash pada CircularProgressIndicator
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))

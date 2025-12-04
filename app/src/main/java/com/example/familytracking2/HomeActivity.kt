@@ -1,9 +1,12 @@
 package com.example.familytracking2
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,32 +21,25 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.rounded.QrCode2
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FabPosition
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -55,30 +51,43 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.rememberAsyncImagePainter
 import com.example.familytracking2.ui.theme.FamilyTracking2Theme
-import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.maps.model.LatLngBounds
 import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
 import java.util.UUID
 
-// --- 1. DATA & SCREEN DEFINITIONS ---
+// --- 1. DATA DEFINITIONS ---
 
-sealed class Screen(val route: String, val icon: Int) {
-    object Home : Screen("home", R.drawable.home_tombol)
-    object Saved : Screen("saved", R.drawable.saved)
-    object Map : Screen("map", R.drawable.map_tombol)
-    object History : Screen("history", R.drawable.activity)
-    object Profile : Screen("profile", 0)
+sealed class Screen(val route: String, val iconRes: Int, val label: String) {
+    object Home : Screen("home", R.drawable.home_tombol, "Home")
+    object Saved : Screen("saved", R.drawable.saved, "Saved")
+    object Map : Screen("map", R.drawable.map_tombol, "Map")
+    object History : Screen("history", R.drawable.activity, "History")
+    object Profile : Screen("profile", 0, "Profile")
 }
 
+// Data class untuk Gallery
+data class GalleryItem(
+    val id: String = UUID.randomUUID().toString(),
+    val uri: Uri? = null,
+    val resourceId: Int? = null,
+    val locationName: String
+)
+
+// Data class Device (Penting agar AddDeviceSheet tidak error)
 data class Device(
     val id: String = UUID.randomUUID().toString(),
     val name: String,
@@ -94,11 +103,16 @@ class HomeActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val username = intent.getStringExtra("EXTRA_USERNAME") ?: "Guest"
+        // Ambil username dari LoginActivity
+        val username = intent.getStringExtra("EXTRA_USERNAME")?.replaceFirstChar { it.uppercase() } ?: "User"
 
         setContent {
             FamilyTracking2Theme {
-                Surface(modifier = Modifier.fillMaxSize(), color = Color.White) {
+                // Warna background aplikasi keseluruhan
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = Color(0xFFF0F8FF)
+                ) {
                     MainScreen(username = username)
                 }
             }
@@ -106,15 +120,16 @@ class HomeActivity : ComponentActivity() {
     }
 }
 
-// --- 3. MAIN SCREEN COMPOSABLE ---
+// --- 3. MAIN SCREEN ---
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(username: String) {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
 
+    // Menggunakan Scaffold agar Bottom Navigation Bar standar (seperti sebelumnya)
     Scaffold(
         bottomBar = {
+            // Sembunyikan navbar jika di halaman profile (opsional, sesuai logika lama)
             if (currentScreen !is Screen.Profile) {
                 BottomNavBar(
                     currentScreen = currentScreen,
@@ -123,453 +138,279 @@ fun MainScreen(username: String) {
             }
         }
     ) { innerPadding ->
+        // Content Area dengan padding dari Scaffold agar tidak tertutup navbar
         Box(modifier = Modifier.padding(innerPadding)) {
             when (currentScreen) {
-                is Screen.Home -> HomeContent(
-                    onProfileClick = { currentScreen = Screen.Profile }
-                )
-                is Screen.Saved -> SavedLocationScreen()
-                is Screen.Map -> MapScreen()
-                is Screen.History -> HistoryScreen()
-                is Screen.Profile -> ProfileContent(username = username)
+                is Screen.Home -> HomeDashboardContent(username = username)
+                is Screen.Saved -> PlaceholderScreen("Saved Locations")
+                is Screen.Map -> PlaceholderScreen("Live Tracking Map")
+                is Screen.History -> PlaceholderScreen("Activity History")
+                is Screen.Profile -> PlaceholderScreen("User Profile")
             }
         }
     }
 }
 
-// --- 4. HOME CONTENT ---
+// --- 4. HOME DASHBOARD CONTENT (Fitur Utama - Desain Baru) ---
 
 @Composable
-fun HomeContent(modifier: Modifier = Modifier, onProfileClick: () -> Unit) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Home",
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.Black
-            )
-            IconButton(
-                onClick = onProfileClick,
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(Color.LightGray)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = "Profile",
-                    tint = Color.Black
-                )
-            }
+fun HomeDashboardContent(username: String) {
+    val scrollState = rememberScrollState()
+
+    // Simulasi data lokasi otomatis untuk "Activity GPS"
+    val lastVisitedPlace = "Candi Prambanan"
+
+    // State untuk Gallery
+    val galleryItems = remember { mutableStateListOf<GalleryItem>() }
+
+    // Launcher untuk memilih gambar dari galeri HP
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            galleryItems.add(0, GalleryItem(uri = uri, locationName = "Lokasi Baru"))
         }
-        Spacer(modifier = Modifier.height(16.dp))
-        Text("Welcome to Family Tracking Home Page!", color = Color.Black)
     }
-}
 
-// --- 5. PROFILE CONTENT ---
-
-@Composable
-fun ProfileContent(modifier: Modifier = Modifier, username: String) {
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .verticalScroll(scrollState)
     ) {
-        Row(
+        // A. Header Section (Abu-abu di atas)
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 32.dp, bottom = 48.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.End
-        ) {
-            Text(
-                text = username,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.Black,
-                modifier = Modifier.padding(end = 16.dp)
-            )
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF4285F4))
-            )
-        }
-
-        val menuItems = listOf("Profile", "Notification", "Research", "Account")
-        menuItems.forEach { item ->
-            Button(
-                onClick = { },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(60.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFD9D9D9),
-                    contentColor = Color.Black
-                ),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    Text(
-                        text = item,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(start = 16.dp)
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-    }
-}
-
-// --- 6. MAP SCREEN & LOGIC ---
-
-private enum class MapPage { DeviceList, MapDisplay }
-
-@Composable
-fun MapScreen(modifier: Modifier = Modifier) {
-    val logoImage = R.drawable.logo
-
-    val devices = remember {
-        mutableStateListOf(
-            Device(name = "Kakak", address = "Jl. magelang km.14", location = LatLng(-7.6835, 110.3392), image = logoImage),
-            Device(name = "Adek", address = "SDN 1 Sinduadi", location = LatLng(-7.7595, 110.359), image = logoImage)
-        )
-    }
-
-    var currentPage by remember { mutableStateOf(MapPage.DeviceList) }
-    var devicesToShowOnMap by remember { mutableStateOf<List<Device>?>(null) }
-    var showAddDeviceSheet by remember { mutableStateOf(false) }
-
-    if (showAddDeviceSheet) {
-        DeviceAddDialog(
-            onDismissRequest = { showAddDeviceSheet = false },
-            onDeviceAdded = { newDevice ->
-                devices.add(newDevice)
-                showAddDeviceSheet = false
-            }
-        )
-    }
-
-    Box(modifier = modifier.fillMaxSize()) {
-        when (currentPage) {
-            MapPage.DeviceList -> DeviceConnectScreen(
-                devices = devices,
-                onAddDeviceClick = { showAddDeviceSheet = true },
-                onViewAllClick = {
-                    devicesToShowOnMap = devices
-                    currentPage = MapPage.MapDisplay
-                },
-                onDeviceClick = { device ->
-                    devicesToShowOnMap = listOf(device)
-                    currentPage = MapPage.MapDisplay
-                }
-            )
-            MapPage.MapDisplay -> MapDisplayScreen(
-                devices = devicesToShowOnMap ?: emptyList(),
-                onBack = { currentPage = MapPage.DeviceList }
-            )
-        }
-    }
-}
-
-@Composable
-fun DeviceConnectScreen(
-    devices: List<Device>,
-    onAddDeviceClick: () -> Unit,
-    onViewAllClick: () -> Unit,
-    onDeviceClick: (Device) -> Unit
-) {
-    var showMyQrDialog by remember { mutableStateOf(false) }
-    val myPairingCode = remember { "DEVICE-${UUID.randomUUID().toString().take(8).uppercase()}" }
-
-    if (showMyQrDialog) {
-        QrCodeDisplayDialog(
-            code = myPairingCode,
-            onDismissRequest = { showMyQrDialog = false }
-        )
-    }
-
-    Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showMyQrDialog = true },
-                containerColor = MaterialTheme.colorScheme.secondary,
-                shape = CircleShape,
-                modifier = Modifier.padding(bottom = 65.dp)
-            ) {
-                Icon(Icons.Rounded.QrCode2, contentDescription = "Show My QR Code", tint = Color.White)
-            }
-        },
-        floatingActionButtonPosition = FabPosition.End,
-        containerColor = Color.White
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp)
-                .padding(top = 16.dp)
+                .background(Color(0xFFE0E0E0))
+                .padding(top = 50.dp, start = 24.dp, end = 24.dp, bottom = 24.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Device Connect", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-                IconButton(
-                    onClick = onAddDeviceClick,
+                Column {
+                    Text(
+                        text = "Hello, $username",
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black
+                    )
+                    Text(
+                        text = "Welcome to Family Tracker",
+                        fontSize = 14.sp,
+                        color = Color.DarkGray
+                    )
+                }
+                // Profile Picture Biru Bulat
+                Box(
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(60.dp)
                         .clip(CircleShape)
-                        .background(Color.Black)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Device", tint = Color.White)
-                }
+                        .background(Color(0xFF4285F4))
+                )
             }
+        }
 
-            Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                items(devices, key = { it.id }) { device ->
-                    DeviceItem(device = device, onClick = { onDeviceClick(device) })
-                }
-            }
+        // B. Your Journey Section
+        Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+            Text(
+                text = "Your journey",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF4285F4),
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
 
-            Button(
-                onClick = onViewAllClick,
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 16.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Black)
+                    .height(220.dp)
             ) {
-                Text("View All Map", color = Color.White, fontSize = 16.sp, modifier = Modifier.padding(vertical = 8.dp))
-            }
-        }
-    }
-}
+                Box(modifier = Modifier.fillMaxSize()) {
+                    // Koordinat contoh (Yogyakarta)
+                    val jogja = LatLng(-7.7956, 110.3695)
+                    val cameraPositionState = rememberCameraPositionState {
+                        position = CameraPosition.fromLatLngZoom(jogja, 12f)
+                    }
 
-// --- 7. DEVICE ITEM FIXED TANPA TRY-CATCH ---
+                    GoogleMap(
+                        modifier = Modifier.fillMaxSize(),
+                        cameraPositionState = cameraPositionState,
+                        uiSettings = MapUiSettings(
+                            zoomControlsEnabled = false,
+                            scrollGesturesEnabled = false,
+                            zoomGesturesEnabled = false,
+                            rotationGesturesEnabled = false,
+                            tiltGesturesEnabled = false
+                        )
+                    ) {
+                        Marker(state = MarkerState(position = LatLng(-7.79, 110.36)), title = "Point 1")
+                        Marker(state = MarkerState(position = LatLng(-7.80, 110.37)), title = "Point 2")
+                        Marker(state = MarkerState(position = LatLng(-7.81, 110.35)), title = "Point 3")
 
-@Composable
-fun DeviceItem(device: Device, onClick: () -> Unit) {
-    // Fallback jika resource tidak ditemukan
-    val painter = painterResource(id = device.image)
+                        Polyline(
+                            points = listOf(
+                                LatLng(-7.79, 110.36),
+                                LatLng(-7.80, 110.37),
+                                LatLng(-7.81, 110.35)
+                            ),
+                            color = Color(0xFFC51162),
+                            width = 5f
+                        )
+                    }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFFE8E8E8))
-            .clickable(onClick = onClick)
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Image(
-            painter = painter,
-            contentDescription = "Device Icon",
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape),
-            contentScale = ContentScale.Crop
-        )
-
-        Spacer(modifier = Modifier.width(16.dp))
-        Column {
-            Text(device.name, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.Black)
-            Text(device.address, color = Color.Gray, fontSize = 14.sp, maxLines = 1)
-        }
-    }
-}
-
-// --- 8. MAP DISPLAY ---
-
-@Composable
-fun MapDisplayScreen(devices: List<Device>, onBack: () -> Unit) {
-    val cameraPositionState = rememberCameraPositionState()
-
-    LaunchedEffect(devices) {
-        if (devices.isNotEmpty()) {
-            if (devices.size == 1) {
-                cameraPositionState.animate(
-                    update = CameraUpdateFactory.newCameraPosition(
-                        CameraPosition(devices.first().location, 15f, 0f, 0f)
-                    ),
-                    durationMs = 1000
-                )
-            } else {
-                val boundsBuilder = LatLngBounds.builder()
-                devices.forEach { boundsBuilder.include(it.location) }
-                cameraPositionState.animate(
-                    update = CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 100),
-                    durationMs = 1000
-                )
-            }
-        }
-    }
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        GoogleMap(
-            modifier = Modifier.fillMaxSize(),
-            cameraPositionState = cameraPositionState
-        ) {
-            devices.forEach { device ->
-                Marker(
-                    state = MarkerState(position = device.location),
-                    title = device.name,
-                    snippet = device.address
-                )
-            }
-        }
-
-        Button(
-            onClick = onBack,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.8f))
-        ) {
-            Text("Kembali ke Daftar", color = Color.Black)
-        }
-    }
-}
-
-// --- 9. OTHER SCREENS & COMPONENTS ---
-
-@Composable
-fun SavedLocationScreen(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Text(
-            text = "Saved Location",
-            fontSize = 32.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 24.dp),
-            color = Color.Black
-        )
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            item { SavedLocationItem("Ngops Cantik w Bestie") }
-            item { SavedLocationItem("Spot nugas nyantai") }
-            item { SavedLocationItem("Resto enak") }
-        }
-    }
-}
-
-@Composable
-fun HistoryScreen(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Text(
-            text = "History Activity",
-            fontSize = 32.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 24.dp),
-            color = Color.Black
-        )
-        Text("No history available yet.", color = Color.Black)
-    }
-}
-
-@Composable
-fun SavedLocationItem(name: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFFE0E0E0))
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            painter = painterResource(id = R.drawable.saved),
-            contentDescription = null,
-            modifier = Modifier.size(24.dp),
-            tint = Color.Black
-        )
-        Spacer(modifier = Modifier.width(16.dp))
-        Text(text = name, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.Black)
-    }
-}
-
-@Composable
-fun DeviceAddDialog(onDismissRequest: () -> Unit, onDeviceAdded: (Device) -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismissRequest,
-        title = { Text("Add Device") },
-        text = { Text("Fitur tambah device dummy.") },
-        confirmButton = {
-            TextButton(onClick = {
-                onDeviceAdded(
-                    Device(
-                        name = "New Device",
-                        address = "Unknown Location",
-                        location = LatLng(-7.7, 110.3),
-                        image = R.drawable.logo
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0x1A4285F4))
                     )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // C. Gallery Section
+        Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Gallery",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
                 )
-            }) { Text("Add Dummy") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismissRequest) { Text("Cancel") }
+                Spacer(modifier = Modifier.width(8.dp))
+                // Badge Count
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFC51162)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = galleryItems.size.toString(),
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Tombol Tambah Foto (+)
+                item {
+                    Box(
+                        modifier = Modifier
+                            .size(100.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color.LightGray.copy(alpha = 0.5f))
+                            .clickable {
+                                galleryLauncher.launch("image/*")
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Add Photo",
+                            tint = Color.Gray,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                }
+
+                // List Foto
+                items(galleryItems) { item ->
+                    GalleryImageItem(item)
+                }
+
+                // Placeholder Photos
+                if (galleryItems.isEmpty()) {
+                    item { PlaceholderImage(Color(0xFF81C784)) } // Hijau
+                    item { PlaceholderImage(Color(0xFF64B5F6)) } // Biru
+                    item { PlaceholderImage(Color(0xFFE57373)) } // Merah
+                }
+            }
         }
-    )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // D. Activity GPS Section
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color(0xFFE0E0E0))
+                .padding(20.dp)
+        ) {
+            Column {
+                Text(
+                    text = "Activity GPS",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFC51162)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                val text = buildAnnotatedString {
+                    append("Anda baru saja mengunjungi tempat ")
+                    withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = Color.Black)) {
+                        append(lastVisitedPlace)
+                    }
+                    append(" yang kami rekomendasikan, apakah itu anda? bagaimana keadaan disana, kuharap kamu selalu senang")
+                }
+
+                Text(
+                    text = text,
+                    fontSize = 14.sp,
+                    color = Color.Black.copy(alpha = 0.8f),
+                    lineHeight = 20.sp
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp)) // Spacer bawah biasa
+    }
 }
 
-@Composable
-fun QrCodeDisplayDialog(code: String, onDismissRequest: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismissRequest,
-        title = { Text("My QR Code") },
-        text = { Text("Code: $code") },
-        confirmButton = {
-            TextButton(onClick = onDismissRequest) { Text("Close") }
-        }
-    )
-}
+// --- 5. COMPONENTS ---
 
+// [KEMBALI KE LOGIKA LAMA] Bottom Navigation Bar Standar
 @Composable
 fun BottomNavBar(currentScreen: Screen, onScreenSelected: (Screen) -> Unit) {
     NavigationBar(
         containerColor = Color.White,
-        contentColor = Color.Black
+        contentColor = Color.Black,
+        tonalElevation = 8.dp
     ) {
         val items = listOf(Screen.Home, Screen.Saved, Screen.Map, Screen.History)
         items.forEach { screen ->
             NavigationBarItem(
                 icon = {
-                    Icon(
-                        painter = painterResource(id = screen.icon),
-                        contentDescription = screen.route,
-                        modifier = Modifier.size(24.dp)
-                    )
+                    // ✅ PERBAIKAN: Menghapus try-catch di sini
+                    if (screen.iconRes != 0) {
+                        Icon(
+                            painter = painterResource(id = screen.iconRes),
+                            contentDescription = screen.label,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    } else {
+                        Icon(Icons.Default.Home, contentDescription = null)
+                    }
                 },
                 label = {
                     Text(
-                        text = screen.route.replaceFirstChar { it.uppercaseChar() },
+                        text = screen.label,
                         fontSize = 10.sp
                     )
                 },
@@ -582,5 +423,41 @@ fun BottomNavBar(currentScreen: Screen, onScreenSelected: (Screen) -> Unit) {
                 )
             )
         }
+    }
+}
+
+@Composable
+fun GalleryImageItem(item: GalleryItem) {
+    Box(
+        modifier = Modifier
+            .size(100.dp)
+            .clip(RoundedCornerShape(16.dp))
+    ) {
+        Image(
+            painter = rememberAsyncImagePainter(item.uri),
+            contentDescription = "Gallery Image",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+@Composable
+fun PlaceholderImage(color: Color) {
+    Box(
+        modifier = Modifier
+            .size(100.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(color)
+    )
+}
+
+@Composable
+fun PlaceholderScreen(title: String) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(text = title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
     }
 }
