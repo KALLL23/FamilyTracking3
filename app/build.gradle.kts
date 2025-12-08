@@ -87,6 +87,7 @@ dependencies {
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 
     // --- FIREBASE ---
+    implementation("com.google.firebase:firebase-storage-ktx")
     implementation(platform("com.google.firebase:firebase-bom:33.1.0"))
     implementation("com.google.firebase:firebase-database")
 
