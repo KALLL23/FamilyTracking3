@@ -47,7 +47,10 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.outlined.PersonAdd
+import androidx.compose.material.icons.outlined.PersonPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -78,6 +81,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -110,6 +114,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
@@ -158,6 +164,14 @@ data class SavedLocation(
     val name: String = "",
     val latitude: Double = 0.0,
     val longitude: Double = 0.0
+)
+
+// ✅ Data class baru untuk riwayat
+data class HistoryEvent(
+    val id: String = "",
+    val message: String = "",
+    val timestamp: Long = 0L,
+    val type: String = "DEFAULT" // "ADD_DEVICE", "RECEIVE_DEVICE"
 )
 
 private enum class MapPage { DeviceList, MapDisplay }
@@ -233,15 +247,102 @@ fun MainScreen(initialUsername: String) {
                     userKey = cleanUsername
                 )
                 is Screen.Saved -> SavedTabScreen(currentUserKey = cleanUsername)
-                is Screen.Map -> MapTabScreen(currentUserKey = cleanUsername)
-                is Screen.History -> PlaceholderScreen("Activity History")
+                is Screen.Map -> MapTabScreen(currentUserKey = cleanUsername, currentUserName = currentUsername) // Pass current user name
+                is Screen.History -> HistoryTabScreen(currentUserKey = cleanUsername) // ✅ Tampilan baru untuk riwayat
                 is Screen.Profile -> PlaceholderScreen("User Profile")
             }
         }
     }
 }
 
-// --- 4. SAVED TAB SCREEN ---
+// ✅ --- 4. HISTORY TAB SCREEN ---
+@Composable
+fun HistoryTabScreen(currentUserKey: String) {
+    val historyEvents = remember { mutableStateListOf<HistoryEvent>() }
+    val database = FirebaseDatabase.getInstance()
+
+    // Load history events from Firebase
+    LaunchedEffect(currentUserKey) {
+        val historyRef = database.getReference("users").child(currentUserKey).child("history").orderByChild("timestamp")
+        historyRef.addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                historyEvents.clear()
+                for (child in snapshot.children) {
+                    val event = child.getValue(HistoryEvent::class.java)
+                    if (event != null) {
+                        historyEvents.add(0, event.copy(id = child.key ?: "")) // Add to top for newest first
+                    }
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {}
+        })
+    }
+
+    Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
+        Text("Riwayat Aktivitas", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(24.dp))
+
+        if (historyEvents.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.activity),
+                        contentDescription = "empty history",
+                        tint = Color.Gray,
+                        modifier = Modifier.size(64.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Belum ada aktivitas tercatat.", color = Color.Gray)
+                }
+            }
+        } else {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                items(historyEvents) { event ->
+                    HistoryItem(event)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun HistoryItem(event: HistoryEvent) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        val icon: ImageVector = when (event.type) {
+            "ADD_DEVICE" -> Icons.Outlined.PersonAdd
+            "RECEIVE_DEVICE" -> Icons.Outlined.PersonPin
+            else -> Icons.Default.Notifications
+        }
+        val iconColor = when (event.type) {
+            "ADD_DEVICE" -> Color(0xFF1E88E5) // Blue
+            "RECEIVE_DEVICE" -> Color(0xFF43A047) // Green
+            else -> Color.Gray
+        }
+
+        Icon(
+            imageVector = icon,
+            contentDescription = event.type,
+            tint = iconColor,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(Modifier.width(16.dp))
+        Column {
+            Text(event.message, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            Text(
+                text = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(event.timestamp)),
+                fontSize = 12.sp,
+                color = Color.Gray
+            )
+        }
+    }
+}
+
+
+// --- 5. SAVED TAB SCREEN ---
 @Composable
 fun SavedTabScreen(currentUserKey: String) {
     val savedLocations = remember { mutableStateListOf<SavedLocation>() }
@@ -312,10 +413,10 @@ fun SavedTabScreen(currentUserKey: String) {
 }
 
 
-// --- 5. MAP TAB SCREEN ---
+// --- 6. MAP TAB SCREEN ---
 
 @Composable
-fun MapTabScreen(currentUserKey: String) {
+fun MapTabScreen(currentUserKey: String, currentUserName: String) {
     val devices = remember { mutableStateListOf<Device>() }
     val context = LocalContext.current
     val database = FirebaseDatabase.getInstance()
@@ -355,6 +456,7 @@ fun MapTabScreen(currentUserKey: String) {
                             isCheckingCode = false
                             if (snapshot.exists()) {
                                 val targetUserSnapshot = snapshot.children.first()
+                                val targetUserKey = targetUserSnapshot.key ?: return
                                 val targetProfileBase64 = targetUserSnapshot.child("profileImageBase64").value?.toString() ?: ""
                                 val isAlreadyAdded = devices.any { it.uniqueCode == inputCode }
 
@@ -366,7 +468,6 @@ fun MapTabScreen(currentUserKey: String) {
                                         id = myRef.key!!,
                                         name = name,
                                         address = "Mencari lokasi...",
-                                        // ✅ SOLUSI BAGIAN 3: Simpan dengan kelas data kita
                                         location = FirebaseLatLng(-7.75, 110.36),
                                         image = R.drawable.logo,
                                         profileImageBase64 = targetProfileBase64,
@@ -374,6 +475,15 @@ fun MapTabScreen(currentUserKey: String) {
                                         uniqueCode = inputCode
                                     )
                                     myRef.setValue(newDevice).addOnSuccessListener {
+                                        // ✅ Buat entri riwayat
+                                        val timestamp = System.currentTimeMillis()
+                                        // Untuk pengguna saat ini
+                                        val myHistoryRef = database.getReference("users").child(currentUserKey).child("history").push()
+                                        myHistoryRef.setValue(HistoryEvent(id = myHistoryRef.key!!, message = "Menambahkan device $name", timestamp = timestamp, type = "ADD_DEVICE"))
+                                        // Untuk pengguna target
+                                        val targetHistoryRef = database.getReference("users").child(targetUserKey).child("history").push()
+                                        targetHistoryRef.setValue(HistoryEvent(id = targetHistoryRef.key!!, message = "$currentUserName menambahkan Anda sebagai device", timestamp = timestamp, type = "RECEIVE_DEVICE"))
+
                                         Toast.makeText(context, "Berhasil terhubung!", Toast.LENGTH_SHORT).show()
                                         showAddDeviceDialog = false
                                     }
@@ -420,7 +530,7 @@ fun MapTabScreen(currentUserKey: String) {
     }
 }
 
-// --- 6. DEVICE LIST UI & MAP DISPLAY ---
+// --- 7. DEVICE LIST UI & MAP DISPLAY ---
 
 @Composable
 fun DeviceListContent(
@@ -481,6 +591,7 @@ fun DeviceListItem(device: Device, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)).background(Color.White)) {
+            // SOLUSI: Logika render yang aman dari crash
             val imageBitmap = remember(device.profileImageBase64) {
                 decodeBase64ToBitmap(device.profileImageBase64)
             }
@@ -493,6 +604,7 @@ fun DeviceListItem(device: Device, onClick: () -> Unit) {
                     contentScale = ContentScale.Crop
                 )
             } else if (device.profileImageUrl.isNotEmpty()) {
+                // Fallback ke URL lama jika Base64 tidak ada
                 Image(
                     painter = rememberAsyncImagePainter(model = device.profileImageUrl),
                     contentDescription = "Device Profile (Legacy)",
@@ -500,6 +612,7 @@ fun DeviceListItem(device: Device, onClick: () -> Unit) {
                     contentScale = ContentScale.Crop
                 )
             } else {
+                // Ikon default jika tidak ada gambar sama sekali
                 Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.align(Alignment.Center), tint = Color.Gray)
             }
         }
@@ -589,7 +702,7 @@ fun FullMapDisplay(
     }
 }
 
-// --- 7. HOME DASHBOARD & PROFILE LOGIC ---
+// --- 8. HOME DASHBOARD & PROFILE LOGIC ---
 
 @Composable
 fun HomeDashboardContent(
@@ -865,7 +978,7 @@ private fun BoxScope.DefaultProfileIcon() {
 }
 
 
-// --- 8. SHARED COMPONENTS ---
+// --- 9. SHARED COMPONENTS ---
 @Composable
 fun AddDeviceDialog(
     isLoading: Boolean,
