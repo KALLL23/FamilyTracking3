@@ -943,7 +943,7 @@ private suspend fun getAddressFromLocation(context: Context, latitude: Double, l
     return withContext(Dispatchers.IO) {
         try {
             val geocoder = Geocoder(context, Locale.getDefault())
-            // getFromLocation() bisa butuh waktu, makanya di IO dispatcher
+            // getFromLocation() bischcca butuh waktu, makanya di IO dispatcher
             @Suppress("DEPRECATION")
             val addresses = geocoder.getFromLocation(latitude, longitude, 1)
             if (addresses != null && addresses.isNotEmpty()) {
