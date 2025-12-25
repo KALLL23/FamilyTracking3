@@ -83,6 +83,9 @@ dependencies {
     implementation("com.google.maps.android:maps-compose:4.4.1")
     implementation("com.google.android.gms:play-services-maps:18.2.0")
 
+    // --- LOCATION SERVICES (WAJIB DITAMBAHKAN) ---
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+
     // --- QR CODE ---
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 

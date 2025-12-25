@@ -1,5 +1,6 @@
 package com.example.familytracking2
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -19,11 +20,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -41,6 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.familytracking2.ui.theme.FamilyTracking2Theme
@@ -51,6 +58,11 @@ class LoginActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "LoginActivity"
+        // Konstanta untuk SharedPreferences
+        const val PREFS_NAME = "UserSession"
+        const val KEY_IS_LOGGED_IN = "isLoggedIn"
+        const val KEY_USERNAME = "username"
+        const val KEY_LOGIN_TIMESTAMP = "loginTimestamp"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -62,7 +74,6 @@ class LoginActivity : ComponentActivity() {
             FamilyTracking2Theme {
                 Box(modifier = Modifier.fillMaxSize()) {
 
-                    // ✅ Aman - panggil langsung di Composable
                     if (resourceExists("map_baru")) {
                         Image(
                             painter = painterResource(id = R.drawable.map_baru),
@@ -78,17 +89,16 @@ class LoginActivity : ComponentActivity() {
                         )
                     }
 
-                    // Lapisan semi transparan di atas background
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(Color.White.copy(alpha = 0.3f))
                     )
 
-                    // Konten utama login
                     AuthScreen(
                         onLoginSuccess = { username ->
-                            Log.d(TAG, "Login success, navigating to Home")
+                            Log.d(TAG, "Login success, saving session and navigating to Home")
+                            saveLoginSession(username) // Simpan sesi login
                             navigateToHome(username)
                         },
                         onRegisterClick = {
@@ -101,13 +111,21 @@ class LoginActivity : ComponentActivity() {
         }
     }
 
-    // ✅ Fungsi untuk cek apakah resource drawable ada
+    // ✅ Fungsi menyimpan sesi login ke SharedPreferences
+    private fun saveLoginSession(username: String) {
+        val sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val editor = sharedPreferences.edit()
+        editor.putBoolean(KEY_IS_LOGGED_IN, true)
+        editor.putString(KEY_USERNAME, username)
+        editor.putLong(KEY_LOGIN_TIMESTAMP, System.currentTimeMillis())
+        editor.apply()
+    }
+
     private fun resourceExists(name: String): Boolean {
         val resId = resources.getIdentifier(name, "drawable", packageName)
         return resId != 0
     }
 
-    // ✅ Navigasi ke Home tanpa crash
     private fun navigateToHome(username: String) {
         val intent = Intent(this, HomeActivity::class.java)
         intent.putExtra("EXTRA_USERNAME", username)
@@ -115,7 +133,6 @@ class LoginActivity : ComponentActivity() {
         startActivity(intent)
     }
 
-    // ✅ Navigasi ke Register tanpa kembali ke menu awal
     private fun navigateToRegister() {
         val intent = Intent(this, RegisterActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -123,7 +140,6 @@ class LoginActivity : ComponentActivity() {
     }
 }
 
-// 🔐 Fungsi hash password
 fun hashPasswordLogin(password: String): String {
     val bytes = password.toByteArray()
     val md = MessageDigest.getInstance("SHA-256")
@@ -131,7 +147,6 @@ fun hashPasswordLogin(password: String): String {
     return digest.fold("") { str, it -> str + "%02x".format(it) }
 }
 
-// 🧩 Tampilan utama login
 @Composable
 fun AuthScreen(
     onLoginSuccess: (String) -> Unit,
@@ -141,6 +156,9 @@ fun AuthScreen(
     var inputUsername by remember { mutableStateOf("") }
     var inputPassword by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
+
+    // State untuk visibility password
+    var passwordVisible by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -189,13 +207,21 @@ fun AuthScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Password
+                // Password dengan Toggle Visibility
                 TextField(
                     value = inputPassword,
                     onValueChange = { inputPassword = it },
                     label = { Text("Password") },
                     shape = RoundedCornerShape(12.dp),
-                    visualTransformation = PasswordVisualTransformation(),
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        val image = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
+                        val description = if (passwordVisible) "Sembunyikan password" else "Tampilkan password"
+
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(imageVector = image, contentDescription = description)
+                        }
+                    },
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color(0xFFF0F0F0),
                         unfocusedContainerColor = Color(0xFFF0F0F0),
@@ -216,7 +242,6 @@ fun AuthScreen(
                         }
 
                         isLoading = true
-
                         val database = FirebaseDatabase.getInstance()
                         val cleanUsername = inputUsername.replace(Regex("[^a-zA-Z0-9]"), "")
 
@@ -229,8 +254,6 @@ fun AuthScreen(
                                     if (storedPass == hashedInput) {
                                         isLoading = false
                                         Toast.makeText(context, "Login Berhasil!", Toast.LENGTH_SHORT).show()
-
-                                        // Delay sedikit agar Toast tampil sebelum pindah halaman
                                         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                                             onLoginSuccess(cleanUsername)
                                         }, 500)
@@ -265,7 +288,6 @@ fun AuthScreen(
                     }
                 }
 
-                // Tombol ke halaman register
                 TextButton(onClick = onRegisterClick) {
                     Text("Belum punya akun? Register", color = Color.Gray)
                 }
