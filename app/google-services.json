@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "197176906762",
+    "firebase_url": "https://family-tracking2-default-rtdb.asia-southeast1.firebasedatabase.app/",
+    "project_id": "family-tracking2",
+    "storage_bucket": "family-tracking2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:197176906762:android:37218c108b0b51c1dc3bf3",
+        "android_client_info": {
+          "package_name": "com.example.familytracking2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBVR2YjZc440aNZbewdu6_gBdAB3Kwr82M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
